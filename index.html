@@ -6,25 +6,17 @@
   <title>Dorm Check-In</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f4f6f8; margin: 0; padding: 15px; color: #333; }
+    body { background: #f4f6f8; margin: 0; padding: 15px 15px 80px 15px; color: #333; }
     header { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
     
     .curfew-bar { display: flex; align-items: center; justify-content: space-between; font-weight: bold; margin-bottom: 12px; }
     input[type="time"] { padding: 6px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
 
     /* Progress Bar */
-    .progress-container { margin-bottom: 12px; }
+    .progress-container { margin-top: 5px; }
     .progress-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: #555; margin-bottom: 4px; }
     .progress-track { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; }
     .progress-fill { background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s ease; }
-
-    /* Search & Action Bar */
-    .search-input { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px; outline: none; }
-    .action-row { display: flex; gap: 8px; }
-    .btn-action { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; color: white; }
-    .btn-copy { background: #673AB7; }
-    .btn-mark-all { background: #E91E63; }
-    .btn-day-reset { background: #e53935; }
 
     .nav-tabs { display: flex; gap: 10px; margin-bottom: 15px; }
     .nav-tab { flex: 1; padding: 12px; text-align: center; background: #e0e0e0; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
@@ -49,6 +41,23 @@
     .badge-late { background: #FF9800; }
     .badge-absent { background: #F44336; }
     
+    /* Sticky Bottom Actions */
+    .bottom-actions {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      padding: 12px 15px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      z-index: 100;
+    }
+    .btn-action { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; }
+    .btn-mark-all { background: #E91E63; }
+    .btn-day-reset { background: #e53935; }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -70,14 +79,6 @@
         <div class="progress-fill" id="progressFill"></div>
       </div>
     </div>
-
-    <input type="text" id="searchInput" class="search-input" placeholder="Search resident name..." oninput="render()">
-
-    <div class="action-row">
-      <button class="btn-action btn-copy" onclick="copyReport()">Copy Report</button>
-      <button class="btn-action btn-mark-all" onclick="markAllRemainingAbsent()">Mark Rest Absent</button>
-      <button class="btn-action btn-day-reset" onclick="manualClearDay()">Reset Day</button>
-    </div>
   </header>
 
   <div class="nav-tabs">
@@ -87,6 +88,12 @@
 
   <div id="viewMain"></div>
   <div id="viewChecked" class="hidden"></div>
+
+  <!-- Bottom Action Buttons -->
+  <div class="bottom-actions">
+    <button class="btn-action btn-mark-all" onclick="markAllRemainingAbsent()">Mark Rest Absent</button>
+    <button class="btn-action btn-day-reset" onclick="manualClearDay()">Reset Day</button>
+  </div>
 
   <script>
     const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw-YQRANEUGawLrKY8FLqrFQKPPXF13o7qsNwp8V6SZJf2WXtY53XKFaEfWr5_w7P632A/exec";
@@ -143,42 +150,6 @@
           });
         });
       }
-    }
-
-    function copyReport() {
-      const currentDate = getAdjustedDate(new Date());
-      let onTimeList = [];
-      let lateList = [];
-      let absentList = [];
-      let unmarkedList = [];
-
-      initialData.forEach(section => {
-        section.residents.forEach(res => {
-          const record = checkIns[res];
-          if (!record) {
-            unmarkedList.push(res);
-          } else if (record.status === 'On Time') {
-            onTimeList.push(res);
-          } else if (record.status === 'Late') {
-            lateList.push(`${res} (+${record.minutesLate}m)`);
-          } else if (record.status === 'Absent') {
-            absentList.push(res);
-          }
-        });
-      });
-
-      let reportText = `📋 Check-In Summary (${currentDate})\n`;
-      reportText += `Total Marked: ${Object.keys(checkIns).length}/${totalResidentCount}\n\n`;
-      reportText += `✅ On Time (${onTimeList.length}): ${onTimeList.join(', ') || 'None'}\n`;
-      reportText += `⏰ Late (${lateList.length}): ${lateList.join(', ') || 'None'}\n`;
-      reportText += `❌ Absent (${absentList.length}): ${absentList.join(', ') || 'None'}\n`;
-      if (unmarkedList.length > 0) {
-        reportText += `❓ Unmarked (${unmarkedList.length}): ${unmarkedList.join(', ')}\n`;
-      }
-
-      navigator.clipboard.writeText(reportText).then(() => {
-        alert("Daily report copied to clipboard!");
-      });
     }
 
     function saveState() {
@@ -262,7 +233,6 @@
     function render() {
       const mainView = document.getElementById('viewMain');
       const checkedView = document.getElementById('viewChecked');
-      const searchQuery = document.getElementById('searchInput')?.value.toLowerCase() || '';
       
       mainView.innerHTML = '';
       checkedView.innerHTML = '';
@@ -280,8 +250,6 @@
         let checkedRoomHtml = '';
 
         section.residents.forEach(res => {
-          if (searchQuery && !res.toLowerCase().includes(searchQuery)) return;
-
           const statusObj = checkIns[res];
 
           if (!statusObj) {
