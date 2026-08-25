@@ -6,7 +6,7 @@
   <title>Dorm Check-In</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f4f6f8; margin: 0; padding: 15px 15px 80px 15px; color: #333; }
+    body { background: #f4f6f8; margin: 0; padding: 15px 15px 85px 15px; color: #333; }
     header { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
     
     .curfew-bar { display: flex; align-items: center; justify-content: space-between; font-weight: bold; margin-bottom: 12px; }
@@ -24,8 +24,11 @@
     
     .floor-title { font-size: 18px; font-weight: bold; margin: 20px 0 10px 0; color: #1565C0; border-bottom: 2px solid #1565C0; padding-bottom: 4px; }
     .room-card { background: white; padding: 12px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .room-title { font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #555; }
     
+    .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #ddd; padding-bottom: 6px; }
+    .room-title { font-size: 15px; font-weight: bold; color: #555; }
+    .btn-room-ontime { background: #2196F3; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
+
     .resident-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
     .resident-row:last-child { border-bottom: none; }
     .resident-name { font-size: 15px; font-weight: 500; }
@@ -65,7 +68,7 @@
 
   <header>
     <div class="curfew-bar">
-      <span>Lights Out Curfew:</span>
+      <span>Lights Out:</span>
       <input type="time" id="curfewTime" value="22:00">
     </div>
 
@@ -152,6 +155,17 @@
       }
     }
 
+    function markRoomOnTime(floorName, roomName) {
+      const section = initialData.find(s => s.floor === floorName && s.room === roomName);
+      if (section) {
+        section.residents.forEach(res => {
+          if (!checkIns[res]) {
+            handleCheckIn(res, section.floor, section.room, 'On Time');
+          }
+        });
+      }
+    }
+
     function saveState() {
       localStorage.setItem('dormCheckIns', JSON.stringify(checkIns));
       render();
@@ -183,10 +197,9 @@
       }
 
       const record = {
-        name, floor, room, status,
-        minutesLate: lateMins,
-        timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        date: getAdjustedDate(now)
+        name,
+        status,
+        minutesLate: lateMins
       };
 
       checkIns[name] = record;
@@ -240,7 +253,6 @@
       let markedCount = Object.keys(checkIns).length;
       let unmarkedCount = totalResidentCount - markedCount;
 
-      // Update Progress Bar
       const percentage = Math.round((markedCount / totalResidentCount) * 100);
       document.getElementById('progressText').innerText = `${markedCount} Marked / ${unmarkedCount} Unmarked (${percentage}%)`;
       document.getElementById('progressFill').style.width = `${percentage}%`;
@@ -309,7 +321,10 @@
           mainView.innerHTML += `
             <div class="floor-title">${section.floor}</div>
             <div class="room-card">
-              <div class="room-title">${section.room}</div>
+              <div class="room-header">
+                <span class="room-title">${section.room}</span>
+                <button class="btn-room-ontime" onclick="markRoomOnTime('${section.floor}', '${section.room}')">All On Time</button>
+              </div>
               ${mainRoomHtml}
             </div>`;
         }
