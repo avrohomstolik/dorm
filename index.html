@@ -96,7 +96,6 @@
       border-radius: 10px;
       margin-bottom: 12px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-      /* Touch Scroll Fix: Prevents swipe down from firing row actions */
       touch-action: pan-y;
       user-select: none;
       -webkit-user-select: none;
@@ -237,8 +236,6 @@
 
     let checkIns = JSON.parse(localStorage.getItem('dormCheckIns')) || {};
     let lastActiveDate = localStorage.getItem('lastActiveDate') || "";
-    
-    // Safety Lock to prevent rapid cascading triggers on hold
     let isActionLocked = false;
 
     function getAdjustedDate(now) {
@@ -259,20 +256,22 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
-    // Manual Reset Day (Clears local state AND updates Google Sheets)
+    function sendToGoogleSheet(payload) {
+      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+    }
+
     function manualClearDay() {
       if (confirm("Are you sure you want to reset all residents to Unmarked for today?")) {
         checkIns = {};
         localStorage.removeItem('dormCheckIns');
         saveState();
 
-        // Sync with Google Sheets to clear today's entries
-        fetch(GOOGLE_SHEET_WEB_APP_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "reset_day" })
-        });
+        sendToGoogleSheet({ action: "reset_day" });
       }
     }
 
@@ -347,64 +346,43 @@
       delete checkIns[name];
       saveState();
 
-      // Tell Google Sheets to remove this row
-      fetch(GOOGLE_SHEET_WEB_APP_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", name: name })
-      });
+      // Send deletion command to Google Sheets
+      sendToGoogleSheet({ action: "delete", name: name });
     }
 
-    function sendToGoogleSheet(record) {
-      fetch(GOOGLE_SHEET_WEB_APP_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record)
-      });
-    }
-
-    // Touch setup with hold-for-absent, swipe cancellation, vibration, and 300ms safety lock
     function setupHoldEvents(element, onNormal, onHold) {
       let holdTimer = null;
       let isHoldTriggered = false;
 
-      // Handle normal tap
       element.addEventListener('click', (e) => {
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
       });
 
-      // Handle touch start (Hold for Absent)
       element.addEventListener('touchstart', (e) => {
         if (isActionLocked) return;
         isHoldTriggered = false;
 
         holdTimer = setTimeout(() => {
           isHoldTriggered = true;
-          isActionLocked = true; // Lock all touch inputs globally
+          isActionLocked = true;
 
-          // Trigger short vibration feedback on hold
           if ("vibrate" in navigator) {
             navigator.vibrate(70);
           }
 
           onHold();
 
-          // 300ms break/delay before next touch can execute
           setTimeout(() => {
             isActionLocked = false;
           }, 300);
-        }, 500); // 500ms hold time
+        }, 500);
       }, { passive: true });
 
-      // Cancel hold timer if user scrolls (finger moves)
       element.addEventListener('touchmove', () => {
         clearTimeout(holdTimer);
       }, { passive: true });
 
-      // Cancel hold timer if finger lifts early
       element.addEventListener('touchend', () => {
         clearTimeout(holdTimer);
       }, { passive: true });
@@ -554,7 +532,7 @@
         document.getElementById('viewMain').classList.add('hidden');
         document.getElementById('viewChecked').classList.remove('hidden');
         document.getElementById('tabMain').classList.remove('active');
-        document.getElementById('tabChecked').classList.remove('active');
+        document.getElementById('tabChecked').classList.add('active');
       }
     }
 
