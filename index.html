@@ -2,397 +2,223 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dorm Check-In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dorm Curfew Tracker</title>
   <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f4f6f8; margin: 0; padding: 15px 15px 85px 15px; color: #333; }
-    header { background: #fff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
-    
-    .curfew-bar { display: flex; align-items: center; justify-content: space-between; font-weight: bold; margin-bottom: 12px; }
-    input[type="time"] { padding: 6px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
-
-    /* Progress Bar */
-    .progress-container { margin-top: 5px; }
-    .progress-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: #555; margin-bottom: 4px; }
-    .progress-track { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; }
-    .progress-fill { background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s ease; }
-
-    .nav-tabs { display: flex; gap: 10px; margin-bottom: 15px; }
-    .nav-tab { flex: 1; padding: 12px; text-align: center; background: #e0e0e0; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
-    .nav-tab.active { background: #2196F3; color: white; }
-    
-    .floor-title { font-size: 18px; font-weight: bold; margin: 20px 0 10px 0; color: #1565C0; border-bottom: 2px solid #1565C0; padding-bottom: 4px; }
-    .room-card { background: white; padding: 12px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    
-    .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px dashed #ddd; padding-bottom: 6px; }
-    .room-title { font-size: 15px; font-weight: bold; color: #555; }
-    .btn-room-ontime { background: #2196F3; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; }
-
-    .resident-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .resident-row:last-child { border-bottom: none; }
-    .resident-name { font-size: 15px; font-weight: 500; }
-    
-    .btn-group { display: flex; gap: 6px; }
-    .btn { border: none; padding: 8px 12px; border-radius: 6px; color: white; font-weight: bold; font-size: 13px; cursor: pointer; user-select: none; }
-    .btn-ontime { background: #4CAF50; }
-    .btn-late { background: #FF9800; }
-    .btn-reset { background: #757575; }
-    
-    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
-    .badge-ontime { background: #4CAF50; }
-    .badge-late { background: #FF9800; }
-    .badge-absent { background: #F44336; }
-    
-    /* Sticky Bottom Actions */
-    .bottom-actions {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: #ffffff;
-      padding: 12px 15px;
-      display: flex;
-      gap: 10px;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-      z-index: 100;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    .btn-action { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; color: white; }
-    .btn-mark-all { background: #E91E63; }
-    .btn-day-reset { background: #e53935; }
 
-    .hidden { display: none; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f5f7;
+      color: #333;
+      padding: 16px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      
+      /* FIX 1: Prevents accidental scroll/swipe gestures from triggering status changes */
+      touch-action: pan-y;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .resident-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      font-size: 0.85rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #e0e0e0;
+    }
+
+    .status-badge.on-time { background: #d4edda; color: #155724; }
+    .status-badge.late { background: #fff3cd; color: #856404; }
+    .status-badge.absent { background: #f8d7da; color: #721c24; }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .btn-ontime { background-color: #28a745; color: white; }
+    .btn-late { background-color: #ffc107; color: #212529; }
+    
+    .hint {
+      font-size: 0.75rem;
+      color: #6c757d;
+      text-align: center;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="curfew-bar">
-      <span>Lights Out:</span>
-      <input type="time" id="curfewTime" value="22:00">
-    </div>
-
-    <!-- Visual Progress Bar -->
-    <div class="progress-container">
-      <div class="progress-label">
-        <span>Progress</span>
-        <span id="progressText">0 Marked / 0 Unmarked</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progressFill"></div>
-      </div>
-    </div>
-  </header>
-
-  <div class="nav-tabs">
-    <button class="nav-tab active" id="tabMain" onclick="switchTab('main')">Unmarked</button>
-    <button class="nav-tab" id="tabChecked" onclick="switchTab('checked')">Marked (<span id="countChecked">0</span>)</button>
-  </div>
-
-  <div id="viewMain"></div>
-  <div id="viewChecked" class="hidden"></div>
-
-  <!-- Bottom Action Buttons -->
-  <div class="bottom-actions">
-    <button class="btn-action btn-mark-all" onclick="markAllRemainingAbsent()">Mark Rest Absent</button>
-    <button class="btn-action btn-day-reset" onclick="manualClearDay()">Reset Day</button>
+  <div class="container">
+    <h1>Resident Curfew Check-In</h1>
+    <div id="roster"></div>
   </div>
 
   <script>
-    const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw-YQRANEUGawLrKY8FLqrFQKPPXF13o7qsNwp8V6SZJf2WXtY53XKFaEfWr5_w7P632A/exec";
+    // Paste your Web App URL from Google Apps Script here
+    const GOOGLE_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
 
-    const initialData = [
-      { floor: "First Floor", room: "Room 1", residents: ["Yosef Lazurus", "Mendel Landu", "Nachi Hoen", "Mednel Minkowitz"] },
-      { floor: "First Floor", room: "Room 2", residents: ["Yossi Andrusier", "Ahron Whilhelm", "Shmuel Simon", "Menachem Fishbein"] },
-      { floor: "First Floor", room: "Room 3", residents: ["Rafi Rud", "Hirsch Perlman", "Shmuel Sandman", "Yisrael Rubashkin"] },
-      { floor: "Second Floor", room: "Room 1", residents: ["Micha Lipskier", "Yakov Elisheveitz", "Dovber Mendelow", "Eli Chein", "Eli Edielkopf"] },
-      { floor: "Second Floor", room: "Room 2", residents: ["Yisrael Web", "Gabi Rosenstein"] },
-      { floor: "Second Floor", room: "Room 3", residents: ["Shlomo Tzweibel", "Zalmy Rosenfeld", "Zev Silverman", "Shneur Thaler"] },
-      { floor: "Third Floor", room: "Room 1", residents: ["Mendel Raskin", "Moshe Greizman", "Levi Weirtzberg"] },
-      { floor: "Third Floor", room: "Room 2", residents: ["Mendel Bogart", "Mendel Borenstein", "Mendel Vishetzsky"] }
+    // Sample Roster Data
+    const residents = [
+      { id: 1, name: "Alex Johnson", status: "Pending", minutesLate: 0 },
+      { id: 2, name: "Chris Lee", status: "Pending", minutesLate: 0 },
+      { id: 3, name: "Jordan Smith", status: "Pending", minutesLate: 0 },
+      { id: 4, name: "Morgan Taylor", status: "Pending", minutesLate: 0 }
     ];
 
-    const totalResidentCount = initialData.reduce((acc, current) => acc + current.residents.length, 0);
+    // Global touch-lock flag to prevent cascading triggers across cards
+    let isActionLocked = false;
 
-    let checkIns = JSON.parse(localStorage.getItem('dormCheckIns')) || {};
-    let lastActiveDate = localStorage.getItem('lastActiveDate') || "";
+    function renderRoster() {
+      const container = document.getElementById("roster");
+      container.innerHTML = "";
 
-    function getAdjustedDate(now) {
-      const d = new Date(now);
-      if (d.getHours() < 4) {
-        d.setDate(d.getDate() - 1);
-      }
-      return d.toISOString().split('T')[0];
+      residents.forEach(resident => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="resident-name">${resident.name}</span>
+            <span class="status-badge ${resident.status.toLowerCase().replace(' ', '-')}">${resident.status} ${resident.minutesLate ? `(${resident.minutesLate}m late)` : ''}</span>
+          </div>
+          <div class="actions">
+            <button class="btn-ontime" data-id="${resident.id}">On Time (Hold for Absent)</button>
+            <button class="btn-late" onclick="handleLate(${resident.id})">Late</button>
+          </div>
+          <div class="hint">Tap = On Time | Hold 500ms = Absent</div>
+        `;
+
+        container.appendChild(card);
+
+        // Attach hold listener for "Absent" behavior with touch fixes and vibration
+        const onTimeBtn = card.querySelector(".btn-ontime");
+        setupHoldToAbsent(onTimeBtn, resident.id);
+      });
     }
 
-    function checkAutoReset() {
-      const currentDate = getAdjustedDate(new Date());
-      if (lastActiveDate && lastActiveDate !== currentDate) {
-        checkIns = {};
-        localStorage.removeItem('dormCheckIns');
-      }
-      lastActiveDate = currentDate;
-      localStorage.setItem('lastActiveDate', currentDate);
-    }
+    function setupHoldToAbsent(buttonElement, residentId) {
+      let holdTimer = null;
+      let isHoldActionTriggered = false;
 
-    function manualClearDay() {
-      if (confirm("Are you sure you want to reset all residents to Unmarked for today?")) {
-        checkIns = {};
-        localStorage.removeItem('dormCheckIns');
-        saveState();
-      }
-    }
+      // Tap event: Marks "On Time"
+      buttonElement.addEventListener("click", function(e) {
+        if (isActionLocked || isHoldActionTriggered) return;
+        updateStatus(residentId, "On Time", 0);
+      });
 
-    function markAllRemainingAbsent() {
-      if (confirm("Mark all remaining unmarked residents as ABSENT?")) {
-        initialData.forEach(section => {
-          section.residents.forEach(res => {
-            if (!checkIns[res]) {
-              handleCheckIn(res, section.floor, section.room, 'Absent');
-            }
-          });
-        });
-      }
-    }
+      // Touch Start: Starts 500ms timer for "Absent"
+      buttonElement.addEventListener("touchstart", function(e) {
+        if (isActionLocked) return;
+        isHoldActionTriggered = false;
 
-    function markRoomOnTime(floorName, roomName) {
-      const section = initialData.find(s => s.floor === floorName && s.room === roomName);
-      if (section) {
-        section.residents.forEach(res => {
-          if (!checkIns[res]) {
-            handleCheckIn(res, section.floor, section.room, 'On Time');
+        holdTimer = setTimeout(() => {
+          isHoldActionTriggered = true;
+          isActionLocked = true; // Lock touch interactions globally
+
+          // VIBRATION FEEDBACK: Fires a 70ms vibration pulse when Absent registers
+          if ("vibrate" in navigator) {
+            navigator.vibrate(70);
           }
-        });
-      }
+
+          updateStatus(residentId, "Absent", 0);
+
+          // FIX 2: 300ms safety break after marking absent before next touch can register
+          setTimeout(() => {
+            isActionLocked = false;
+          }, 300);
+        }, 500); // 500ms hold duration
+      }, { passive: true });
+
+      // FIX 1: Cancel hold timer immediately if finger moves (user is scrolling)
+      buttonElement.addEventListener("touchmove", function() {
+        clearTimeout(holdTimer);
+      }, { passive: true });
+
+      // Cancel hold timer when finger lifts before 500ms threshold
+      buttonElement.addEventListener("touchend", function() {
+        clearTimeout(holdTimer);
+      }, { passive: true });
     }
 
-    function saveState() {
-      localStorage.setItem('dormCheckIns', JSON.stringify(checkIns));
-      render();
-    }
-
-    function calculateLateMinutes(manualTime = null) {
-      const now = manualTime ? new Date(manualTime) : new Date();
-      const curfewVal = document.getElementById('curfewTime').value;
-      const [hours, minutes] = curfewVal.split(':');
+    function handleLate(residentId) {
+      if (isActionLocked) return;
       
-      const curfewDate = new Date(now);
-      curfewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-
-      if (now < curfewDate && (parseInt(hours) > 12 && now.getHours() < 4)) {
-        curfewDate.setDate(curfewDate.getDate() - 1);
+      const mins = prompt("Enter minutes late:", "15");
+      if (mins !== null && !isNaN(mins) && mins > 0) {
+        updateStatus(residentId, "Late", parseInt(mins, 10));
       }
-
-      const diffMs = now - curfewDate;
-      const diffMins = Math.floor(diffMs / 60000);
-      return diffMins > 0 ? diffMins : 0;
     }
 
-    function handleCheckIn(name, floor, room, status, manualMins = null) {
-      const now = new Date();
-      let lateMins = 0;
-      
-      if (status === 'Late') {
-        lateMins = manualMins !== null ? manualMins : calculateLateMinutes();
+    function updateStatus(residentId, status, minutesLate) {
+      const resident = residents.find(r => r.id === residentId);
+      if (resident) {
+        resident.status = status;
+        resident.minutesLate = minutesLate;
+        renderRoster();
+        sendToGoogleSheets(resident.name, status, minutesLate);
       }
-
-      const record = {
-        name,
-        status,
-        minutesLate: lateMins
-      };
-
-      checkIns[name] = record;
-      saveState();
-      sendToGoogleSheet(record);
     }
 
-    function resetResident(name) {
-      delete checkIns[name];
-      saveState();
-    }
+    function sendToGoogleSheets(name, status, minutesLate) {
+      if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL") return;
 
-    function sendToGoogleSheet(record) {
-      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+      fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(record)
-      });
+        body: JSON.stringify({ name, status, minutesLate })
+      }).catch(err => console.error("Sync error:", err));
     }
 
-    function setupHoldEvents(element, onNormal, onHold) {
-      let timer;
-      let isHold = false;
-
-      const start = () => {
-        isHold = false;
-        timer = setTimeout(() => {
-          isHold = true;
-          onHold();
-        }, 600);
-      };
-
-      const cancel = () => clearTimeout(timer);
-      const click = () => { if (!isHold) onNormal(); };
-
-      element.addEventListener('touchstart', start);
-      element.addEventListener('touchend', (e) => { cancel(); click(); });
-      element.addEventListener('mousedown', start);
-      element.addEventListener('mouseup', (e) => { cancel(); click(); });
-      element.addEventListener('mouseleave', cancel);
-    }
-
-    function render() {
-      const mainView = document.getElementById('viewMain');
-      const checkedView = document.getElementById('viewChecked');
-      
-      mainView.innerHTML = '';
-      checkedView.innerHTML = '';
-
-      let markedCount = Object.keys(checkIns).length;
-      let unmarkedCount = totalResidentCount - markedCount;
-
-      const percentage = Math.round((markedCount / totalResidentCount) * 100);
-      document.getElementById('progressText').innerText = `${markedCount} Marked / ${unmarkedCount} Unmarked (${percentage}%)`;
-      document.getElementById('progressFill').style.width = `${percentage}%`;
-
-      initialData.forEach(section => {
-        let mainRoomHtml = '';
-        let checkedRoomHtml = '';
-
-        section.residents.forEach(res => {
-          const statusObj = checkIns[res];
-
-          if (!statusObj) {
-            const row = document.createElement('div');
-            row.className = 'resident-row';
-            row.innerHTML = `<span class="resident-name">${res}</span><div class="btn-group"></div>`;
-            
-            const btnGroup = row.querySelector('.btn-group');
-            
-            const btnOnTime = document.createElement('button');
-            btnOnTime.className = 'btn btn-ontime';
-            btnOnTime.innerText = 'On Time';
-            setupHoldEvents(btnOnTime, 
-              () => handleCheckIn(res, section.floor, section.room, 'On Time'),
-              () => handleCheckIn(res, section.floor, section.room, 'Absent')
-            );
-
-            const btnLate = document.createElement('button');
-            btnLate.className = 'btn btn-late';
-            btnLate.innerText = 'Late';
-            setupHoldEvents(btnLate,
-              () => handleCheckIn(res, section.floor, section.room, 'Late'),
-              () => {
-                const customMins = prompt(`Enter minutes late for ${res}:`, calculateLateMinutes());
-                if (customMins !== null) {
-                  handleCheckIn(res, section.floor, section.room, 'Late', parseInt(customMins) || 0);
-                }
-              }
-            );
-
-            btnGroup.appendChild(btnOnTime);
-            btnGroup.appendChild(btnLate);
-            mainRoomHtml += row.outerHTML;
-          } else {
-            let badgeClass = 'badge-ontime';
-            let label = 'On Time';
-            if (statusObj.status === 'Late') {
-              badgeClass = 'badge-late';
-              label = `Late (${statusObj.minutesLate}m)`;
-            } else if (statusObj.status === 'Absent') {
-              badgeClass = 'badge-absent';
-              label = 'Absent';
-            }
-
-            checkedRoomHtml += `
-              <div class="resident-row">
-                <span class="resident-name">${res}</span>
-                <div>
-                  <span class="badge ${badgeClass}">${label}</span>
-                  <button class="btn btn-reset" onclick="resetResident('${res}')">Undo</button>
-                </div>
-              </div>`;
-          }
-        });
-
-        if (mainRoomHtml !== '') {
-          mainView.innerHTML += `
-            <div class="floor-title">${section.floor}</div>
-            <div class="room-card">
-              <div class="room-header">
-                <span class="room-title">${section.room}</span>
-                <button class="btn-room-ontime" onclick="markRoomOnTime('${section.floor}', '${section.room}')">All On Time</button>
-              </div>
-              ${mainRoomHtml}
-            </div>`;
-        }
-
-        if (checkedRoomHtml !== '') {
-          checkedView.innerHTML += `
-            <div class="floor-title">${section.floor}</div>
-            <div class="room-card">
-              <div class="room-title">${section.room}</div>
-              ${checkedRoomHtml}
-            </div>`;
-        }
-      });
-
-      document.getElementById('countChecked').innerText = markedCount;
-      rebindEvents();
-    }
-
-    function rebindEvents() {
-      initialData.forEach(section => {
-        section.residents.forEach(res => {
-          if (!checkIns[res]) {
-            const rows = document.querySelectorAll('.resident-row');
-            rows.forEach(row => {
-              if (row.querySelector('.resident-name')?.innerText === res) {
-                const btnOnTime = row.querySelector('.btn-ontime');
-                const btnLate = row.querySelector('.btn-late');
-                
-                if (btnOnTime) {
-                  setupHoldEvents(btnOnTime,
-                    () => handleCheckIn(res, section.floor, section.room, 'On Time'),
-                    () => handleCheckIn(res, section.floor, section.room, 'Absent')
-                  );
-                }
-                if (btnLate) {
-                  setupHoldEvents(btnLate,
-                    () => handleCheckIn(res, section.floor, section.room, 'Late'),
-                    () => {
-                      const customMins = prompt(`Enter minutes late for ${res}:`, calculateLateMinutes());
-                      if (customMins !== null) {
-                        handleCheckIn(res, section.floor, section.room, 'Late', parseInt(customMins) || 0);
-                      }
-                    }
-                  );
-                }
-              }
-            });
-          }
-        });
-      });
-    }
-
-    function switchTab(tab) {
-      if (tab === 'main') {
-        document.getElementById('viewMain').classList.remove('hidden');
-        document.getElementById('viewChecked').classList.add('hidden');
-        document.getElementById('tabMain').classList.add('active');
-        document.getElementById('tabChecked').classList.remove('active');
-      } else {
-        document.getElementById('viewMain').classList.add('hidden');
-        document.getElementById('viewChecked').classList.remove('hidden');
-        document.getElementById('tabMain').classList.remove('active');
-        document.getElementById('tabChecked').classList.add('active');
-      }
-    }
-
-    checkAutoReset();
-    render();
+    // Initial render
+    renderRoster();
   </script>
 </body>
 </html>
