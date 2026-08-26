@@ -259,11 +259,20 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
+    // Manual Reset Day (Clears local state AND updates Google Sheets)
     function manualClearDay() {
       if (confirm("Are you sure you want to reset all residents to Unmarked for today?")) {
         checkIns = {};
         localStorage.removeItem('dormCheckIns');
         saveState();
+
+        // Sync with Google Sheets to clear today's entries
+        fetch(GOOGLE_SHEET_WEB_APP_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "reset_day" })
+        });
       }
     }
 
@@ -322,6 +331,7 @@
       }
 
       const record = {
+        action: "save",
         name,
         status,
         minutesLate: lateMins
@@ -332,9 +342,18 @@
       sendToGoogleSheet(record);
     }
 
+    // Reset (Undo) Function synced with Google Sheets
     function resetResident(name) {
       delete checkIns[name];
       saveState();
+
+      // Tell Google Sheets to remove this row
+      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", name: name })
+      });
     }
 
     function sendToGoogleSheet(record) {
@@ -535,7 +554,7 @@
         document.getElementById('viewMain').classList.add('hidden');
         document.getElementById('viewChecked').classList.remove('hidden');
         document.getElementById('tabMain').classList.remove('active');
-        document.getElementById('tabChecked').classList.add('active');
+        document.getElementById('tabChecked').classList.remove('active');
       }
     }
 
