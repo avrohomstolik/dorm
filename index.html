@@ -96,10 +96,6 @@
       border-radius: 10px;
       margin-bottom: 12px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-      touch-action: pan-y;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
     }
     
     .room-header {
@@ -123,15 +119,61 @@
       touch-action: manipulation;
     }
 
+    /* SWIPE CONTAINER STYLES */
+    .swipe-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #222;
+    }
+
+    .swipe-bg {
+      position: absolute;
+      top: 0; bottom: 0; left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      font-weight: bold;
+      font-size: 12px;
+      color: white;
+      padding: 0 15px;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    .swipe-bg-right { background: #4CAF50; justify-content: flex-start; }
+    .swipe-bg-late { background: #FF9800; justify-content: flex-end; }
+    .swipe-bg-absent { background: #F44336; justify-content: flex-end; }
+
     .resident-row {
+      position: relative;
+      z-index: 2;
+      background: #fff;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
+      padding: 8px 10px;
+      touch-action: pan-y;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    .resident-row:last-child { border-bottom: none; }
+
+    .resident-name-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     .resident-name { font-size: 15px; font-weight: 500; }
+
+    /* Repeat Offender Badge */
+    .offender-badge {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+    }
     
     .btn-group { display: flex; gap: 6px; }
     .btn {
@@ -192,7 +234,6 @@
       <input type="time" id="curfewTime" value="22:00">
     </div>
 
-    <!-- Visual Progress Bar -->
     <div class="progress-container">
       <div class="progress-label">
         <span>Progress</span>
@@ -212,7 +253,6 @@
   <div id="viewMain"></div>
   <div id="viewChecked" class="hidden"></div>
 
-  <!-- Sticky Bottom Action Buttons -->
   <div class="bottom-actions">
     <button class="btn-action btn-mark-all" onclick="markAllRemainingAbsent()">Mark Rest Absent</button>
     <button class="btn-action btn-day-reset" onclick="manualClearDay()">Reset Day</button>
@@ -236,9 +276,9 @@
 
     let checkIns = JSON.parse(localStorage.getItem('dormCheckIns')) || {};
     let lastActiveDate = localStorage.getItem('lastActiveDate') || "";
+    let offenderData = {};
     let isActionLocked = false;
 
-    // Adjust date string so 12:00 AM - 3:59 AM counts toward yesterday's date
     function getAdjustedDate(now) {
       const d = new Date(now);
       if (d.getHours() < 4) {
@@ -257,6 +297,20 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
+    function fetchOffenderData() {
+      fetch(GOOGLE_SHEET_WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "get_offenders" })
+      })
+      .then(res => res.json())
+      .then(data => {
+        offenderData = data || {};
+        render();
+      })
+      .catch(err => console.log("Offender load error:", err));
+    }
+
     function sendToGoogleSheet(payload) {
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
@@ -271,7 +325,6 @@
         checkIns = {};
         localStorage.removeItem('dormCheckIns');
         saveState();
-
         sendToGoogleSheet({ action: "reset_day" });
       }
     }
@@ -305,7 +358,6 @@
       render();
     }
 
-    // Handles curfews whether set to 10:00 PM (22:00) or 1:00 AM (01:00)
     function calculateLateMinutes(manualTime = null) {
       const now = manualTime ? new Date(manualTime) : new Date();
       const curfewVal = document.getElementById('curfewTime').value;
@@ -317,12 +369,9 @@
       const curfewDate = new Date(now);
       curfewDate.setHours(curfewHour, curfewMin, 0, 0);
 
-      // If curfew is after midnight (e.g. 01:00 AM) and check-in happens before midnight (e.g. 11:30 PM)
       if (curfewHour < 4 && now.getHours() >= 12) {
         curfewDate.setDate(curfewDate.getDate() + 1);
-      }
-      // If curfew is before midnight (e.g. 10:00 PM) and check-in happens past midnight (e.g. 01:00 AM)
-      else if (curfewHour >= 12 && now.getHours() < 4) {
+      } else if (curfewHour >= 12 && now.getHours() < 4) {
         curfewDate.setDate(curfewDate.getDate() - 1);
       }
 
@@ -333,18 +382,11 @@
 
     function handleCheckIn(name, floor, room, status, manualMins = null) {
       let lateMins = 0;
-      
       if (status === 'Late') {
         lateMins = manualMins !== null ? manualMins : calculateLateMinutes();
       }
 
-      const record = {
-        action: "save",
-        name,
-        status,
-        minutesLate: lateMins
-      };
-
+      const record = { action: "save", name, status, minutesLate: lateMins };
       checkIns[name] = record;
       saveState();
       sendToGoogleSheet(record);
@@ -353,7 +395,6 @@
     function resetResident(name) {
       delete checkIns[name];
       saveState();
-
       sendToGoogleSheet({ action: "delete", name: name });
     }
 
@@ -361,38 +402,87 @@
       let holdTimer = null;
       let isHoldTriggered = false;
 
-      element.addEventListener('click', (e) => {
+      element.addEventListener('click', () => {
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
       });
 
-      element.addEventListener('touchstart', (e) => {
+      element.addEventListener('touchstart', () => {
         if (isActionLocked) return;
         isHoldTriggered = false;
 
         holdTimer = setTimeout(() => {
           isHoldTriggered = true;
           isActionLocked = true;
-
-          if ("vibrate" in navigator) {
-            navigator.vibrate(70);
-          }
-
+          if ("vibrate" in navigator) navigator.vibrate(70);
           onHold();
-
-          setTimeout(() => {
-            isActionLocked = false;
-          }, 300);
+          setTimeout(() => { isActionLocked = false; }, 300);
         }, 500);
       }, { passive: true });
 
-      element.addEventListener('touchmove', () => {
-        clearTimeout(holdTimer);
+      element.addEventListener('touchmove', () => clearTimeout(holdTimer), { passive: true });
+      element.addEventListener('touchend', () => clearTimeout(holdTimer), { passive: true });
+    }
+
+    // SWIPE GESTURE HANDLER
+    function attachSwipeHandler(container, resName, floor, room) {
+      const card = container.querySelector('.resident-row');
+      const bgRight = container.querySelector('.swipe-bg-right');
+      const bgLate = container.querySelector('.swipe-bg-late');
+      const bgAbsent = container.querySelector('.swipe-bg-absent');
+
+      let startX = 0;
+      let currentX = 0;
+      let isDragging = false;
+
+      card.addEventListener('touchstart', (e) => {
+        // Prevent swipe triggers when user presses action buttons inside the row directly
+        if (e.target.tagName === 'BUTTON') return;
+        startX = e.touches[0].clientX;
+        isDragging = true;
+        card.style.transition = 'none';
       }, { passive: true });
 
-      element.addEventListener('touchend', () => {
-        clearTimeout(holdTimer);
+      card.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        currentX = e.touches[0].clientX - startX;
+
+        card.style.transform = `translateX(${currentX}px)`;
+
+        bgRight.style.opacity = '0';
+        bgLate.style.opacity = '0';
+        bgAbsent.style.opacity = '0';
+
+        if (currentX > 50) {
+          bgRight.style.opacity = '1';
+        } else if (currentX < -50 && currentX >= -150) {
+          bgLate.style.opacity = '1';
+        } else if (currentX < -150) {
+          bgAbsent.style.opacity = '1';
+        }
       }, { passive: true });
+
+      card.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        card.style.transition = 'transform 0.2s ease-out';
+
+        if (currentX > 90) { // Swipe Right -> On Time
+          card.style.transform = 'translateX(100%)';
+          if ("vibrate" in navigator) navigator.vibrate(30);
+          setTimeout(() => handleCheckIn(resName, floor, room, 'On Time'), 150);
+        } else if (currentX < -50 && currentX >= -150) { // Short Left -> Late
+          card.style.transform = 'translateX(-100%)';
+          if ("vibrate" in navigator) navigator.vibrate(30);
+          setTimeout(() => handleCheckIn(resName, floor, room, 'Late'), 150);
+        } else if (currentX < -150) { // Far Left -> Absent
+          card.style.transform = 'translateX(-100%)';
+          if ("vibrate" in navigator) navigator.vibrate(50);
+          setTimeout(() => handleCheckIn(resName, floor, room, 'Absent'), 150);
+        } else {
+          card.style.transform = 'translateX(0px)';
+        }
+      });
     }
 
     function render() {
@@ -410,30 +500,42 @@
       document.getElementById('progressFill').style.width = `${percentage}%`;
 
       initialData.forEach(section => {
-        let mainRoomHtml = '';
+        let mainRoomNodes = [];
         let checkedRoomHtml = '';
 
         section.residents.forEach(res => {
           const statusObj = checkIns[res];
+          const latesCount = offenderData[res] || 0;
+          const badgeHtml = latesCount >= 3 ? `<span class="offender-badge">⚠️ ${latesCount}x</span>` : '';
 
           if (!statusObj) {
-            const row = document.createElement('div');
-            row.className = 'resident-row';
-            row.innerHTML = `<span class="resident-name">${res}</span><div class="btn-group"></div>`;
+            const swipeContainer = document.createElement('div');
+            swipeContainer.className = 'swipe-container';
+            swipeContainer.innerHTML = `
+              <div class="swipe-bg swipe-bg-right">ON TIME</div>
+              <div class="swipe-bg swipe-bg-late">LATE</div>
+              <div class="swipe-bg swipe-bg-absent">ABSENT</div>
+              <div class="resident-row">
+                <div class="resident-name-container">
+                  <span class="resident-name">${res}</span>
+                  ${badgeHtml}
+                </div>
+                <div class="btn-group">
+                  <button class="btn btn-ontime">On Time</button>
+                  <button class="btn btn-late">Late</button>
+                </div>
+              </div>`;
+
+            attachSwipeHandler(swipeContainer, res, section.floor, section.room);
             
-            const btnGroup = row.querySelector('.btn-group');
-            
-            const btnOnTime = document.createElement('button');
-            btnOnTime.className = 'btn btn-ontime';
-            btnOnTime.innerText = 'On Time';
+            const btnOnTime = swipeContainer.querySelector('.btn-ontime');
+            const btnLate = swipeContainer.querySelector('.btn-late');
+
             setupHoldEvents(btnOnTime, 
               () => handleCheckIn(res, section.floor, section.room, 'On Time'),
               () => handleCheckIn(res, section.floor, section.room, 'Absent')
             );
 
-            const btnLate = document.createElement('button');
-            btnLate.className = 'btn btn-late';
-            btnLate.innerText = 'Late';
             setupHoldEvents(btnLate,
               () => handleCheckIn(res, section.floor, section.room, 'Late'),
               () => {
@@ -444,9 +546,7 @@
               }
             );
 
-            btnGroup.appendChild(btnOnTime);
-            btnGroup.appendChild(btnLate);
-            mainRoomHtml += row.outerHTML;
+            mainRoomNodes.push(swipeContainer);
           } else {
             let badgeClass = 'badge-ontime';
             let label = 'On Time';
@@ -460,7 +560,10 @@
 
             checkedRoomHtml += `
               <div class="resident-row">
-                <span class="resident-name">${res}</span>
+                <div class="resident-name-container">
+                  <span class="resident-name">${res}</span>
+                  ${badgeHtml}
+                </div>
                 <div>
                   <span class="badge ${badgeClass}">${label}</span>
                   <button class="btn btn-reset" onclick="resetResident('${res}')">Undo</button>
@@ -469,16 +572,23 @@
           }
         });
 
-        if (mainRoomHtml !== '') {
-          mainView.innerHTML += `
-            <div class="floor-title">${section.floor}</div>
-            <div class="room-card">
-              <div class="room-header">
-                <span class="room-title">${section.room}</span>
-                <button class="btn-room-ontime" onclick="markRoomOnTime('${section.floor}', '${section.room}')">All On Time</button>
-              </div>
-              ${mainRoomHtml}
+        if (mainRoomNodes.length > 0) {
+          const cardDiv = document.createElement('div');
+          cardDiv.className = 'room-card';
+          cardDiv.innerHTML = `
+            <div class="room-header">
+              <span class="room-title">${section.room}</span>
+              <button class="btn-room-ontime" onclick="markRoomOnTime('${section.floor}', '${section.room}')">All On Time</button>
             </div>`;
+          
+          mainRoomNodes.forEach(node => cardDiv.appendChild(node));
+
+          const floorHeader = document.createElement('div');
+          floorHeader.className = 'floor-title';
+          floorHeader.innerText = section.floor;
+
+          mainView.appendChild(floorHeader);
+          mainView.appendChild(cardDiv);
         }
 
         if (checkedRoomHtml !== '') {
@@ -492,41 +602,6 @@
       });
 
       document.getElementById('countChecked').innerText = markedCount;
-      rebindEvents();
-    }
-
-    function rebindEvents() {
-      initialData.forEach(section => {
-        section.residents.forEach(res => {
-          if (!checkIns[res]) {
-            const rows = document.querySelectorAll('.resident-row');
-            rows.forEach(row => {
-              if (row.querySelector('.resident-name')?.innerText === res) {
-                const btnOnTime = row.querySelector('.btn-ontime');
-                const btnLate = row.querySelector('.btn-late');
-                
-                if (btnOnTime) {
-                  setupHoldEvents(btnOnTime,
-                    () => handleCheckIn(res, section.floor, section.room, 'On Time'),
-                    () => handleCheckIn(res, section.floor, section.room, 'Absent')
-                  );
-                }
-                if (btnLate) {
-                  setupHoldEvents(btnLate,
-                    () => handleCheckIn(res, section.floor, section.room, 'Late'),
-                    () => {
-                      const customMins = prompt(`Enter minutes late for ${res}:`, calculateLateMinutes());
-                      if (customMins !== null) {
-                        handleCheckIn(res, section.floor, section.room, 'Late', parseInt(customMins) || 0);
-                      }
-                    }
-                  );
-                }
-              }
-            });
-          }
-        });
-      });
     }
 
     function switchTab(tab) {
@@ -544,6 +619,7 @@
     }
 
     checkAutoReset();
+    fetchOffenderData();
     render();
   </script>
 </body>
