@@ -238,6 +238,7 @@
     let lastActiveDate = localStorage.getItem('lastActiveDate') || "";
     let isActionLocked = false;
 
+    // Adjust date string so 12:00 AM - 3:59 AM counts toward yesterday's date
     function getAdjustedDate(now) {
       const d = new Date(now);
       if (d.getHours() < 4) {
@@ -304,15 +305,24 @@
       render();
     }
 
+    // Handles curfews whether set to 10:00 PM (22:00) or 1:00 AM (01:00)
     function calculateLateMinutes(manualTime = null) {
       const now = manualTime ? new Date(manualTime) : new Date();
       const curfewVal = document.getElementById('curfewTime').value;
       const [hours, minutes] = curfewVal.split(':');
       
-      const curfewDate = new Date(now);
-      curfewDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      const curfewHour = parseInt(hours, 10);
+      const curfewMin = parseInt(minutes, 10);
 
-      if (now < curfewDate && (parseInt(hours) > 12 && now.getHours() < 4)) {
+      const curfewDate = new Date(now);
+      curfewDate.setHours(curfewHour, curfewMin, 0, 0);
+
+      // If curfew is after midnight (e.g. 01:00 AM) and check-in happens before midnight (e.g. 11:30 PM)
+      if (curfewHour < 4 && now.getHours() >= 12) {
+        curfewDate.setDate(curfewDate.getDate() + 1);
+      }
+      // If curfew is before midnight (e.g. 10:00 PM) and check-in happens past midnight (e.g. 01:00 AM)
+      else if (curfewHour >= 12 && now.getHours() < 4) {
         curfewDate.setDate(curfewDate.getDate() - 1);
       }
 
@@ -322,7 +332,6 @@
     }
 
     function handleCheckIn(name, floor, room, status, manualMins = null) {
-      const now = new Date();
       let lateMins = 0;
       
       if (status === 'Late') {
@@ -341,12 +350,10 @@
       sendToGoogleSheet(record);
     }
 
-    // Reset (Undo) Function synced with Google Sheets
     function resetResident(name) {
       delete checkIns[name];
       saveState();
 
-      // Send deletion command to Google Sheets
       sendToGoogleSheet({ action: "delete", name: name });
     }
 
