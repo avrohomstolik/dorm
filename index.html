@@ -161,18 +161,41 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-wrap: wrap;
     }
     .resident-name { font-size: 15px; font-weight: 500; }
 
-    /* Repeat Offender Badge */
+    /* Warning Badges */
     .offender-badge {
-      background: #ffebee;
-      color: #c62828;
-      border: 1px solid #ef9a9a;
       padding: 2px 6px;
       border-radius: 10px;
       font-size: 11px;
       font-weight: bold;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .offender-badge.tier-1 {
+      background: #fffde7;
+      color: #f57f17;
+      border: 1px solid #fff59d;
+    }
+    .offender-badge.tier-2 {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffcc80;
+    }
+    /* 3x in 6 Days High Alert */
+    .offender-badge.tier-3 {
+      background: #ffebee;
+      color: #b71c1c;
+      border: 1px solid #ef9a9a;
+      box-shadow: 0 0 4px rgba(213, 0, 0, 0.2);
+    }
+    .offender-details {
+      font-size: 10px;
+      font-weight: normal;
+      opacity: 0.9;
     }
     
     .btn-group { display: flex; gap: 6px; }
@@ -424,7 +447,6 @@
       element.addEventListener('touchend', () => clearTimeout(holdTimer), { passive: true });
     }
 
-    // SWIPE GESTURE HANDLER
     function attachSwipeHandler(container, resName, floor, room) {
       const card = container.querySelector('.resident-row');
       const bgRight = container.querySelector('.swipe-bg-right');
@@ -436,7 +458,6 @@
       let isDragging = false;
 
       card.addEventListener('touchstart', (e) => {
-        // Prevent swipe triggers when user presses action buttons inside the row directly
         if (e.target.tagName === 'BUTTON') return;
         startX = e.touches[0].clientX;
         isDragging = true;
@@ -467,15 +488,15 @@
         isDragging = false;
         card.style.transition = 'transform 0.2s ease-out';
 
-        if (currentX > 90) { // Swipe Right -> On Time
+        if (currentX > 90) {
           card.style.transform = 'translateX(100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
           setTimeout(() => handleCheckIn(resName, floor, room, 'On Time'), 150);
-        } else if (currentX < -50 && currentX >= -150) { // Short Left -> Late
+        } else if (currentX < -50 && currentX >= -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
           setTimeout(() => handleCheckIn(resName, floor, room, 'Late'), 150);
-        } else if (currentX < -150) { // Far Left -> Absent
+        } else if (currentX < -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(50);
           setTimeout(() => handleCheckIn(resName, floor, room, 'Absent'), 150);
@@ -483,6 +504,24 @@
           card.style.transform = 'translateX(0px)';
         }
       });
+    }
+
+    // Helper: Build warning badge HTML (highlights 3x in 6 days specifically)
+    function getOffenderBadgeHtml(residentName) {
+      const lateHistory = offenderData[residentName];
+      if (!lateHistory || lateHistory.length === 0) return '';
+
+      const count = lateHistory.length;
+      const details = `(${lateHistory.join(', ')})`;
+
+      if (count === 1) {
+        return `<span class="offender-badge tier-1">🟡 1x <span class="offender-details">${details}</span></span>`;
+      } else if (count === 2) {
+        return `<span class="offender-badge tier-2">🟠 2x <span class="offender-details">${details}</span></span>`;
+      } else {
+        // High priority alert for 3+ lates in past 6 days
+        return `<span class="offender-badge tier-3">🚨 ${count}x LATE (PAST 6 DAYS) <span class="offender-details">${details}</span></span>`;
+      }
     }
 
     function render() {
@@ -505,8 +544,7 @@
 
         section.residents.forEach(res => {
           const statusObj = checkIns[res];
-          const latesCount = offenderData[res] || 0;
-          const badgeHtml = latesCount >= 3 ? `<span class="offender-badge">⚠️ ${latesCount}x</span>` : '';
+          const badgeHtml = getOffenderBadgeHtml(res);
 
           if (!statusObj) {
             const swipeContainer = document.createElement('div');
