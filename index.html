@@ -185,7 +185,6 @@
       color: #e65100;
       border: 1px solid #ffcc80;
     }
-    /* 3x in 6 Days High Alert */
     .offender-badge.tier-3 {
       background: #ffebee;
       color: #b71c1c;
@@ -329,7 +328,7 @@
       .then(res => res.json())
       .then(data => {
         offenderData = data || {};
-        render();
+        // Store offender data silently without forcing a full DOM re-render mid-action
       })
       .catch(err => console.log("Offender load error:", err));
     }
@@ -425,12 +424,12 @@
       let holdTimer = null;
       let isHoldTriggered = false;
 
-      element.addEventListener('click', () => {
+      element.addEventListener('click', (e) => {
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
       });
 
-      element.addEventListener('touchstart', () => {
+      element.addEventListener('touchstart', (e) => {
         if (isActionLocked) return;
         isHoldTriggered = false;
 
@@ -483,30 +482,32 @@
         }
       }, { passive: true });
 
-      card.addEventListener('touchend', () => {
+      card.addEventListener('touchend', (e) => {
         if (!isDragging) return;
         isDragging = false;
         card.style.transition = 'transform 0.2s ease-out';
 
         if (currentX > 90) {
+          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'On Time'), 150);
+          handleCheckIn(resName, floor, room, 'On Time');
         } else if (currentX < -50 && currentX >= -150) {
+          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'Late'), 150);
+          handleCheckIn(resName, floor, room, 'Late');
         } else if (currentX < -150) {
+          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(50);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'Absent'), 150);
+          handleCheckIn(resName, floor, room, 'Absent');
         } else {
           card.style.transform = 'translateX(0px)';
         }
       });
     }
 
-    // Helper: Build warning badge HTML (highlights 3x in 6 days specifically)
     function getOffenderBadgeHtml(residentName) {
       const lateHistory = offenderData[residentName];
       if (!lateHistory || lateHistory.length === 0) return '';
@@ -519,7 +520,6 @@
       } else if (count === 2) {
         return `<span class="offender-badge tier-2">🟠 2x <span class="offender-details">${details}</span></span>`;
       } else {
-        // High priority alert for 3+ lates in past 6 days
         return `<span class="offender-badge tier-3">🚨 ${count}x LATE (PAST 6 DAYS) <span class="offender-details">${details}</span></span>`;
       }
     }
