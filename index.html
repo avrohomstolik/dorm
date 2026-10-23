@@ -345,12 +345,30 @@
       });
     }
 
+    // Updates go to the sheet one at a time, in order, so bulk actions
+    // (All On Time / Mark Rest Absent) don't collide with each other.
+    const sendQueue = [];
+    let isSending = false;
+
     function sendToGoogleSheet(payload) {
+      sendQueue.push(payload);
+      processSendQueue();
+    }
+
+    function processSendQueue() {
+      if (isSending || sendQueue.length === 0) return;
+      isSending = true;
+      const payload = sendQueue.shift();
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(payload)
+      })
+      .catch(err => console.log("Send error:", err))
+      .finally(() => {
+        isSending = false;
+        processSendQueue();
       });
     }
 
@@ -368,10 +386,11 @@
         initialData.forEach(section => {
           section.residents.forEach(res => {
             if (!checkIns[res]) {
-              handleCheckIn(res, section.floor, section.room, 'Absent');
+              handleCheckIn(res, section.floor, section.room, 'Absent', null, true);
             }
           });
         });
+        saveState();
       }
     }
 
@@ -381,9 +400,10 @@
       if (section) {
         section.residents.forEach(res => {
           if (!checkIns[res]) {
-            handleCheckIn(res, section.floor, section.room, 'On Time');
+            handleCheckIn(res, section.floor, section.room, 'On Time', null, true);
           }
         });
+        saveState();
       }
     }
 
@@ -414,9 +434,11 @@
       return diffMins > 0 ? diffMins : 0;
     }
 
-    function handleCheckIn(name, floor, room, status, manualMins = null) {
-      if (isActionLocked) return;
-      isActionLocked = true;
+    function handleCheckIn(name, floor, room, status, manualMins = null, bulk = false) {
+      if (!bulk) {
+        if (isActionLocked) return;
+        isActionLocked = true;
+      }
 
       let lateMins = 0;
       if (status === 'Late') {
@@ -425,6 +447,12 @@
 
       const record = { action: "save", name, status, minutesLate: lateMins };
       checkIns[name] = record;
+
+      if (bulk) {
+        // caller redraws once after all residents are marked
+        sendToGoogleSheet(record);
+        return;
+      }
       
       saveState();
       sendToGoogleSheet(record);
