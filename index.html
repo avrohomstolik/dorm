@@ -319,6 +319,7 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
+    // Fetches warnings silently into memory without triggering a full screen re-render
     function fetchOffenderData() {
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
@@ -328,7 +329,6 @@
       .then(res => res.json())
       .then(data => {
         offenderData = data || {};
-        // Store offender data silently without forcing a full DOM re-render mid-action
       })
       .catch(err => console.log("Offender load error:", err));
     }
@@ -403,6 +403,9 @@
     }
 
     function handleCheckIn(name, floor, room, status, manualMins = null) {
+      if (isActionLocked) return;
+      isActionLocked = true;
+
       let lateMins = 0;
       if (status === 'Late') {
         lateMins = manualMins !== null ? manualMins : calculateLateMinutes();
@@ -410,8 +413,16 @@
 
       const record = { action: "save", name, status, minutesLate: lateMins };
       checkIns[name] = record;
+      
+      // Update UI state synchronously
       saveState();
+      
+      // Background sheet network sync
       sendToGoogleSheet(record);
+
+      setTimeout(() => {
+        isActionLocked = false;
+      }, 300);
     }
 
     function resetResident(name) {
@@ -425,20 +436,20 @@
       let isHoldTriggered = false;
 
       element.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
       });
 
       element.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
         if (isActionLocked) return;
         isHoldTriggered = false;
 
         holdTimer = setTimeout(() => {
           isHoldTriggered = true;
-          isActionLocked = true;
           if ("vibrate" in navigator) navigator.vibrate(70);
           onHold();
-          setTimeout(() => { isActionLocked = false; }, 300);
         }, 500);
       }, { passive: true });
 
@@ -457,7 +468,7 @@
       let isDragging = false;
 
       card.addEventListener('touchstart', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.tagName === 'BUTTON' || isActionLocked) return;
         startX = e.touches[0].clientX;
         isDragging = true;
         card.style.transition = 'none';
@@ -488,17 +499,14 @@
         card.style.transition = 'transform 0.2s ease-out';
 
         if (currentX > 90) {
-          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
           handleCheckIn(resName, floor, room, 'On Time');
         } else if (currentX < -50 && currentX >= -150) {
-          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
           handleCheckIn(resName, floor, room, 'Late');
         } else if (currentX < -150) {
-          if (e.cancelable) e.preventDefault();
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(50);
           handleCheckIn(resName, floor, room, 'Absent');
