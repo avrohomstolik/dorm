@@ -241,7 +241,84 @@
     .btn-mark-all { background: #E91E63; }
     .btn-day-reset { background: #e53935; }
 
-    .hidden { display: none; }
+    .sync-status {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .sync-status.ok { background: #e8f5e9; color: #2e7d32; }
+    .sync-status.saving { background: #e3f2fd; color: #1565c0; }
+    .sync-status.warn { background: #fff3e0; color: #e65100; }
+
+    .btn-summary { background: #5E35B1; }
+
+    .toast {
+      position: fixed;
+      left: 15px;
+      right: 15px;
+      bottom: 80px;
+      z-index: 150;
+      background: #323232;
+      color: white;
+      padding: 12px 14px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+    .toast button {
+      background: #FFC107;
+      color: #222;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 15px;
+    }
+    .modal-box {
+      background: white;
+      border-radius: 12px;
+      padding: 15px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-box h3 { margin-bottom: 10px; }
+    .modal-box pre {
+      white-space: pre-wrap;
+      font-size: 14px;
+      overflow-y: auto;
+      background: #f4f6f8;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .modal-actions { display: flex; gap: 10px; }
+    .btn-copy { background: #2196F3; }
+    .btn-close { background: #757575; }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -261,6 +338,8 @@
         <div class="progress-fill" id="progressFill"></div>
       </div>
     </div>
+
+    <div id="syncStatus" class="sync-status ok">All saved ✓</div>
   </header>
 
   <div class="nav-tabs">
@@ -273,14 +352,28 @@
 
   <div class="bottom-actions">
     <button class="btn-action btn-mark-all" onclick="markAllRemainingAbsent()">Mark Rest Absent</button>
+    <button class="btn-action btn-summary" onclick="openSummary()">Summary</button>
     <button class="btn-action btn-day-reset" onclick="manualClearDay()">Reset Day</button>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="summaryModal" class="modal hidden">
+    <div class="modal-box">
+      <h3>Tonight's summary</h3>
+      <pre id="summaryText"></pre>
+      <div class="modal-actions">
+        <button class="btn-action btn-copy" id="copyBtn" onclick="copySummary()">Copy</button>
+        <button class="btn-action btn-close" onclick="closeSummary()">Close</button>
+      </div>
+    </div>
   </div>
 
   <script>
     const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw-YQRANEUGawLrKY8FLqrFQKPPXF13o7qsNwp8V6SZJf2WXtY53XKFaEfWr5_w7P632A/exec";
 
     const initialData = [
-      { floor: "First Floor", room: "Room 1", residents: ["Yosef Lazurus", "Mendel Landu", "Nachi Hoen", "Mednel Minkowitz"] },
+      { floor: "First Floor", room: "Room 1", residents: ["Yosef Lazurus", "Mendel Landu", "Nachi Hoen", "Mendel Minkowitz"] },
       { floor: "First Floor", room: "Room 2", residents: ["Yossi Andrusier", "Ahron Whilhelm", "Shmuel Simon", "Menachem Fishbein"] },
       { floor: "First Floor", room: "Room 3", residents: ["Rafi Rud", "Hirsch Perlman", "Shmuel Sandman", "Yisrael Rubashkin"] },
       { floor: "Second Floor", room: "Room 1", residents: ["Micha Lipskier", "Yakov Elisheveitz", "Dovber Mendelow", "Eli Chein", "Eli Edielkopf"] },
@@ -293,6 +386,12 @@
     const totalResidentCount = initialData.reduce((acc, current) => acc + current.residents.length, 0);
 
     let checkIns = JSON.parse(localStorage.getItem('dormCheckIns')) || {};
+    // one-time fix for the old misspelled name
+    if (checkIns["Mednel Minkowitz"]) {
+      checkIns["Mendel Minkowitz"] = Object.assign({}, checkIns["Mednel Minkowitz"], { name: "Mendel Minkowitz" });
+      delete checkIns["Mednel Minkowitz"];
+      localStorage.setItem('dormCheckIns', JSON.stringify(checkIns));
+    }
     let lastActiveDate = localStorage.getItem('lastActiveDate') || "";
     let offenderData = {};
     let isActionLocked = false;
@@ -345,32 +444,71 @@
       });
     }
 
-    // Updates go to the sheet one at a time, in order, so bulk actions
-    // (All On Time / Mark Rest Absent) don't collide with each other.
-    const sendQueue = [];
+    // Updates go to the sheet one at a time, in order. Unsent updates are
+    // saved on the phone and retried, so nothing is lost if the Wi-Fi drops.
+    let sendQueue = [];
+    try { sendQueue = JSON.parse(localStorage.getItem('dormSendQueue')) || []; } catch (e) { sendQueue = []; }
     let isSending = false;
+    let lastSendFailed = false;
+    let retryTimer = null;
+
+    function persistQueue() {
+      try { localStorage.setItem('dormSendQueue', JSON.stringify(sendQueue)); } catch (e) {}
+      updateSyncStatus();
+    }
+
+    function updateSyncStatus() {
+      const el = document.getElementById('syncStatus');
+      if (!el) return;
+      const n = sendQueue.length;
+      if (n === 0) {
+        el.textContent = 'All saved ✓';
+        el.className = 'sync-status ok';
+      } else if (lastSendFailed || !navigator.onLine) {
+        el.textContent = `Offline - ${n} waiting to save (keep this page open)`;
+        el.className = 'sync-status warn';
+      } else {
+        el.textContent = `Saving... ${n} left`;
+        el.className = 'sync-status saving';
+      }
+    }
 
     function sendToGoogleSheet(payload) {
-      sendQueue.push(payload);
+      // stamp the date now so a late retry still lands on the right day's sheet
+      sendQueue.push(Object.assign({}, payload, { date: getAdjustedDate(new Date()) }));
+      persistQueue();
       processSendQueue();
     }
 
     function processSendQueue() {
-      if (isSending || sendQueue.length === 0) return;
+      if (isSending || sendQueue.length === 0) { updateSyncStatus(); return; }
       isSending = true;
-      const payload = sendQueue.shift();
+      updateSyncStatus();
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(sendQueue[0])
       })
-      .catch(err => console.log("Send error:", err))
-      .finally(() => {
+      .then(() => {
+        sendQueue.shift();
+        lastSendFailed = false;
         isSending = false;
+        persistQueue();
         processSendQueue();
+      })
+      .catch(err => {
+        console.log("Send error:", err);
+        lastSendFailed = true;
+        isSending = false;
+        updateSyncStatus();
+        clearTimeout(retryTimer);
+        retryTimer = setTimeout(processSendQueue, 5000);
       });
     }
+
+    window.addEventListener('online', processSendQueue);
+    window.addEventListener('offline', updateSyncStatus);
 
     function manualClearDay() {
       if (confirm("Are you sure you want to reset all residents to Unmarked for today?")) {
@@ -381,16 +519,28 @@
       }
     }
 
+    function undoBulk(names) {
+      names.forEach(n => {
+        delete checkIns[n];
+        sendToGoogleSheet({ action: "delete", name: n });
+      });
+      saveState();
+      hideToast();
+    }
+
     function markAllRemainingAbsent() {
       if (confirm("Mark all remaining unmarked residents as ABSENT?")) {
+        const marked = [];
         initialData.forEach(section => {
           section.residents.forEach(res => {
             if (!checkIns[res]) {
               handleCheckIn(res, section.floor, section.room, 'Absent', null, true);
+              marked.push(res);
             }
           });
         });
         saveState();
+        if (marked.length) showUndoToast(`${marked.length} marked absent`, () => undoBulk(marked));
       }
     }
 
@@ -398,12 +548,15 @@
       if (isActionLocked) return;
       const section = initialData.find(s => s.floor === floorName && s.room === roomName);
       if (section) {
+        const marked = [];
         section.residents.forEach(res => {
           if (!checkIns[res]) {
             handleCheckIn(res, section.floor, section.room, 'On Time', null, true);
+            marked.push(res);
           }
         });
         saveState();
+        if (marked.length) showUndoToast(`${section.room}: ${marked.length} marked on time`, () => undoBulk(marked));
       }
     }
 
@@ -436,7 +589,13 @@
 
     function handleCheckIn(name, floor, room, status, manualMins = null, bulk = false) {
       if (!bulk) {
-        if (isActionLocked) return;
+        if (isActionLocked) return false;
+        if (status === 'Late') {
+          const prior = Array.isArray(offenderData[name]) ? offenderData[name].length : 0;
+          if (prior >= 2 && !confirm(`${name} already has ${prior} lates in the last 6 days.\n\nThis would be late #${prior + 1}. Mark as late?`)) {
+            return false;
+          }
+        }
         isActionLocked = true;
       }
 
@@ -451,7 +610,7 @@
       if (bulk) {
         // caller redraws once after all residents are marked
         sendToGoogleSheet(record);
-        return;
+        return true;
       }
       
       saveState();
@@ -460,6 +619,7 @@
       setTimeout(() => {
         isActionLocked = false;
       }, 300);
+      return true;
     }
 
     function resetResident(name) {
@@ -536,21 +696,24 @@
         isDragging = false;
         card.style.transition = 'transform 0.2s ease-out';
 
+        let ok = null;
         if (currentX > 90) {
           card.style.transform = 'translateX(100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          handleCheckIn(resName, floor, room, 'On Time');
+          ok = handleCheckIn(resName, floor, room, 'On Time');
         } else if (currentX < -50 && currentX >= -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          handleCheckIn(resName, floor, room, 'Late');
+          ok = handleCheckIn(resName, floor, room, 'Late');
         } else if (currentX < -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(50);
-          handleCheckIn(resName, floor, room, 'Absent');
+          ok = handleCheckIn(resName, floor, room, 'Absent');
         } else {
           card.style.transform = 'translateX(0px)';
         }
+        if (ok === false) card.style.transform = 'translateX(0px)';
+        currentX = 0;
       });
     }
 
@@ -711,6 +874,95 @@
       document.getElementById('countChecked').innerText = markedCount;
     }
 
+    let toastTimer = null;
+
+    function showUndoToast(message, onUndo) {
+      const t = document.getElementById('toast');
+      t.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = message;
+      const btn = document.createElement('button');
+      btn.textContent = 'Undo';
+      btn.onclick = onUndo;
+      t.appendChild(span);
+      t.appendChild(btn);
+      t.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, 8000);
+    }
+
+    function hideToast() {
+      clearTimeout(toastTimer);
+      document.getElementById('toast').classList.add('hidden');
+    }
+
+    function buildSummaryText() {
+      const dateStr = getAdjustedDate(new Date());
+      const late = [];
+      const absent = [];
+      const unmarked = [];
+      const repeat = [];
+      let onTime = 0;
+
+      initialData.forEach(section => {
+        section.residents.forEach(res => {
+          const rec = checkIns[res];
+          const prior = Array.isArray(offenderData[res]) ? offenderData[res].length : 0;
+          if (!rec) {
+            unmarked.push(res);
+          } else if (rec.status === 'Late') {
+            late.push(rec.minutesLate > 0 ? `${res} (${rec.minutesLate}m)` : res);
+            if (prior + 1 >= 3) repeat.push(`${res} (${prior + 1}x)`);
+          } else if (rec.status === 'Absent') {
+            absent.push(res);
+          } else {
+            onTime++;
+          }
+        });
+      });
+
+      const lines = [`Lights Out - ${dateStr}`, ''];
+      lines.push(`On time: ${onTime}`);
+      lines.push(`Late: ${late.length}`);
+      lines.push(`Absent: ${absent.length}`);
+      if (unmarked.length) lines.push(`Not marked yet: ${unmarked.length}`);
+      if (late.length) { lines.push('', 'LATE:'); late.forEach(x => lines.push('- ' + x)); }
+      if (absent.length) { lines.push('', 'ABSENT:'); absent.forEach(x => lines.push('- ' + x)); }
+      if (repeat.length) { lines.push('', '3+ LATES IN THE PAST 6 DAYS:'); repeat.forEach(x => lines.push('- ' + x)); }
+      if (unmarked.length) { lines.push('', 'NOT MARKED YET:'); unmarked.forEach(x => lines.push('- ' + x)); }
+      return lines.join('\n');
+    }
+
+    function openSummary() {
+      document.getElementById('summaryText').textContent = buildSummaryText();
+      document.getElementById('copyBtn').textContent = 'Copy';
+      document.getElementById('summaryModal').classList.remove('hidden');
+    }
+
+    function closeSummary() {
+      document.getElementById('summaryModal').classList.add('hidden');
+    }
+
+    function copySummary() {
+      const text = document.getElementById('summaryText').textContent;
+      const done = () => { document.getElementById('copyBtn').textContent = 'Copied ✓'; };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { showError('Copy failed - select the text and copy it by hand'); }
+        document.body.removeChild(ta);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+      } else {
+        fallback();
+      }
+    }
+
     function switchTab(tab) {
       if (tab === 'main') {
         document.getElementById('viewMain').classList.remove('hidden');
@@ -732,6 +984,8 @@
 
     checkAutoReset();
     render();
+    updateSyncStatus();
+    processSendQueue();
     fetchOffenderData();
   </script>
 </body>
