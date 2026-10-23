@@ -197,7 +197,7 @@
       opacity: 0.9;
     }
     
-    .btn-group { display: flex; gap: 6px; }
+    .btn-group { display: flex; gap: 6px; z-index: 10; }
     .btn {
       border: none;
       padding: 8px 12px;
@@ -319,7 +319,6 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
-    // Fetches warnings silently into memory without triggering a full screen re-render
     function fetchOffenderData() {
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
@@ -414,10 +413,7 @@
       const record = { action: "save", name, status, minutesLate: lateMins };
       checkIns[name] = record;
       
-      // Update UI state synchronously
       saveState();
-      
-      // Background sheet network sync
       sendToGoogleSheet(record);
 
       setTimeout(() => {
@@ -436,6 +432,7 @@
       let isHoldTriggered = false;
 
       element.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
@@ -468,7 +465,7 @@
       let isDragging = false;
 
       card.addEventListener('touchstart', (e) => {
-        if (e.target.tagName === 'BUTTON' || isActionLocked) return;
+        if (e.target.closest('button') || isActionLocked) return;
         startX = e.touches[0].clientX;
         isDragging = true;
         card.style.transition = 'none';
