@@ -328,10 +328,21 @@
       })
       .then(res => res.json())
       .then(data => {
-        offenderData = data || {};
+        const clean = {};
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          Object.keys(data).forEach(k => {
+            if (Array.isArray(data[k])) clean[k] = data[k];
+          });
+        } else {
+          showError("Late history reply was not the expected format: " + JSON.stringify(data).slice(0, 200));
+        }
+        offenderData = clean;
         render();
       })
-      .catch(err => console.log("Offender load error:", err));
+      .catch(err => {
+        console.log("Offender load error:", err);
+        showError("Could not load late history: " + err);
+      });
     }
 
     function sendToGoogleSheet(payload) {
@@ -515,8 +526,31 @@
       });
     }
 
+    function showError(msg) {
+      let box = document.getElementById('errorBanner');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'errorBanner';
+        box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999;background:#b71c1c;color:#fff;font-size:12px;padding:8px 12px;';
+        box.onclick = () => box.remove();
+        document.body.appendChild(box);
+      }
+      box.textContent = "Error (tap to hide): " + msg;
+    }
+
+    window.addEventListener('error', (e) => showError(e.message + " (line " + e.lineno + ")"));
+    window.addEventListener('unhandledrejection', (e) => showError(String(e.reason)));
+
     function getOffenderBadgeHtml(residentName) {
-      const lateHistory = offenderData[residentName];
+      try {
+        return buildBadge(residentName);
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function buildBadge(residentName) {
+      const lateHistory = Object.prototype.hasOwnProperty.call(offenderData, residentName) ? offenderData[residentName] : null;
       if (!Array.isArray(lateHistory) || lateHistory.length === 0) return '';
 
       const count = lateHistory.length;
