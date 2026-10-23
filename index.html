@@ -38,7 +38,6 @@
       border-radius: 6px;
     }
 
-    /* Progress Bar */
     .progress-container { margin-top: 5px; }
     .progress-label {
       display: flex;
@@ -119,7 +118,6 @@
       touch-action: manipulation;
     }
 
-    /* SWIPE CONTAINER STYLES */
     .swipe-container {
       position: relative;
       overflow: hidden;
@@ -165,7 +163,6 @@
     }
     .resident-name { font-size: 15px; font-weight: 500; }
 
-    /* 3-Tier Warning Badges */
     .offender-badge {
       padding: 2px 6px;
       border-radius: 10px;
@@ -187,8 +184,9 @@
     }
     .offender-badge.tier-3 {
       background: #ffebee;
-      color: #c62828;
+      color: #b71c1c;
       border: 1px solid #ef9a9a;
+      box-shadow: 0 0 4px rgba(213, 0, 0, 0.2);
     }
     .offender-details {
       font-size: 10px;
@@ -196,7 +194,7 @@
       opacity: 0.9;
     }
     
-    .btn-group { display: flex; gap: 6px; }
+    .btn-group { display: flex; gap: 6px; z-index: 10; }
     .btn {
       border: none;
       padding: 8px 12px;
@@ -217,7 +215,6 @@
     .badge-late { background: #FF9800; }
     .badge-absent { background: #F44336; }
     
-    /* Sticky Bottom Actions */
     .bottom-actions {
       position: fixed;
       bottom: 0;
@@ -300,12 +297,16 @@
     let offenderData = {};
     let isActionLocked = false;
 
+    // FIX: use the LOCAL date (not UTC via toISOString), with the 4 AM cutoff
     function getAdjustedDate(now) {
       const d = new Date(now);
       if (d.getHours() < 4) {
         d.setDate(d.getDate() - 1);
       }
-      return d.toISOString().split('T')[0];
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
     }
 
     function checkAutoReset() {
@@ -318,6 +319,7 @@
       localStorage.setItem('lastActiveDate', currentDate);
     }
 
+    // FIX: re-render once the late history arrives so the badges actually show
     function fetchOffenderData() {
       fetch(GOOGLE_SHEET_WEB_APP_URL, {
         method: "POST",
@@ -402,6 +404,9 @@
     }
 
     function handleCheckIn(name, floor, room, status, manualMins = null) {
+      if (isActionLocked) return;
+      isActionLocked = true;
+
       let lateMins = 0;
       if (status === 'Late') {
         lateMins = manualMins !== null ? manualMins : calculateLateMinutes();
@@ -409,8 +414,13 @@
 
       const record = { action: "save", name, status, minutesLate: lateMins };
       checkIns[name] = record;
+      
       saveState();
       sendToGoogleSheet(record);
+
+      setTimeout(() => {
+        isActionLocked = false;
+      }, 300);
     }
 
     function resetResident(name) {
@@ -423,21 +433,22 @@
       let holdTimer = null;
       let isHoldTriggered = false;
 
-      element.addEventListener('click', () => {
+      element.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (isActionLocked || isHoldTriggered) return;
         onNormal();
       });
 
-      element.addEventListener('touchstart', () => {
+      element.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
         if (isActionLocked) return;
         isHoldTriggered = false;
 
         holdTimer = setTimeout(() => {
           isHoldTriggered = true;
-          isActionLocked = true;
           if ("vibrate" in navigator) navigator.vibrate(70);
           onHold();
-          setTimeout(() => { isActionLocked = false; }, 300);
         }, 500);
       }, { passive: true });
 
@@ -456,7 +467,7 @@
       let isDragging = false;
 
       card.addEventListener('touchstart', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.closest('button') || isActionLocked) return;
         startX = e.touches[0].clientX;
         isDragging = true;
         card.style.transition = 'none';
@@ -481,7 +492,7 @@
         }
       }, { passive: true });
 
-      card.addEventListener('touchend', () => {
+      card.addEventListener('touchend', (e) => {
         if (!isDragging) return;
         isDragging = false;
         card.style.transition = 'transform 0.2s ease-out';
@@ -489,25 +500,24 @@
         if (currentX > 90) {
           card.style.transform = 'translateX(100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'On Time'), 150);
+          handleCheckIn(resName, floor, room, 'On Time');
         } else if (currentX < -50 && currentX >= -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(30);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'Late'), 150);
+          handleCheckIn(resName, floor, room, 'Late');
         } else if (currentX < -150) {
           card.style.transform = 'translateX(-100%)';
           if ("vibrate" in navigator) navigator.vibrate(50);
-          setTimeout(() => handleCheckIn(resName, floor, room, 'Absent'), 150);
+          handleCheckIn(resName, floor, room, 'Absent');
         } else {
           card.style.transform = 'translateX(0px)';
         }
       });
     }
 
-    // Helper: Build the 3-Tier Warning Badge HTML
     function getOffenderBadgeHtml(residentName) {
       const lateHistory = offenderData[residentName];
-      if (!lateHistory || lateHistory.length === 0) return '';
+      if (!Array.isArray(lateHistory) || lateHistory.length === 0) return '';
 
       const count = lateHistory.length;
       const details = `(${lateHistory.join(', ')})`;
@@ -517,7 +527,7 @@
       } else if (count === 2) {
         return `<span class="offender-badge tier-2">🟠 2x <span class="offender-details">${details}</span></span>`;
       } else {
-        return `<span class="offender-badge tier-3">⚠️ ${count}x <span class="offender-details">${details}</span></span>`;
+        return `<span class="offender-badge tier-3">🚨 ${count}x LATE (PAST 6 DAYS) <span class="offender-details">${details}</span></span>`;
       }
     }
 
@@ -653,9 +663,14 @@
       }
     }
 
+    // FIX: refresh late history whenever the app comes back to the foreground
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) fetchOffenderData();
+    });
+
     checkAutoReset();
-    fetchOffenderData();
     render();
+    fetchOffenderData();
   </script>
 </body>
 </html>
